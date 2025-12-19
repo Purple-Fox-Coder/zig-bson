@@ -46,8 +46,8 @@ pub fn Reader(comptime T: type) type {
             }
 
             const len = try self.readI32();
-            var elements = std.ArrayList(types.Document.Element).init(owned.arena.allocator());
-            defer elements.deinit();
+            var elements = std.ArrayList(types.Document.Element).empty;
+            defer elements.deinit(owned.arena.allocator());
             std.log.debug("reading doc of len {d} curr count {d}", .{ len, self.reader.bytes_read });
 
             while (self.reader.bytes_read < len - 1) {
@@ -146,7 +146,7 @@ pub fn Reader(comptime T: type) type {
                 };
                 const element_ptr = try owned.arena.allocator().create(RawBson);
                 element_ptr.* = element;
-                try elements.append(.{ name, element_ptr });
+                try elements.append(owned.arena.allocator(), .{ name, element_ptr });
             }
 
             const lastByte = try self.reader.reader().readByte();
@@ -156,7 +156,7 @@ pub fn Reader(comptime T: type) type {
             }
             std.log.debug("len {d} read {d}", .{ len, self.reader.bytes_read });
 
-            owned.value = RawBson.makeDocument(try elements.toOwnedSlice());
+            owned.value = RawBson.makeDocument(try elements.toOwnedSlice(owned.arena.allocator()));
             return owned;
         }
 

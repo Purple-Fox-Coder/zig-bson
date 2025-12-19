@@ -52,7 +52,7 @@ test ObjectId {
     const allocator = std.testing.allocator;
     const objId = try ObjectId.fromHex("507f191e810c19729de860ea");
     try std.testing.expectEqual(504987472, objId.timestamp());
-    const json = try std.json.stringifyAlloc(
+    const json = try std.json.Stringify.valueAlloc(
         allocator,
         objId,
         .{},
@@ -84,7 +84,7 @@ pub const Datetime = struct {
 
 test Datetime {
     const allocator = std.testing.allocator;
-    const json = try std.json.stringifyAlloc(
+    const json = try std.json.Stringify.valueAlloc(
         allocator,
         Datetime.fromMillis(1716919531350804),
         .{},
@@ -152,7 +152,7 @@ pub const MinKey = struct {
 
 test "MinKey.jsonStringify" {
     const allocator = std.testing.allocator;
-    const json = try std.json.stringifyAlloc(
+    const json = try std.json.Stringify.valueAlloc(
         allocator,
         MinKey{},
         .{},
@@ -173,7 +173,7 @@ pub const MaxKey = struct {
 
 test "MaxKey.jsonStringify" {
     const allocator = std.testing.allocator;
-    const json = try std.json.stringifyAlloc(
+    const json = try std.json.Stringify.valueAlloc(
         allocator,
         MaxKey{},
         .{},
@@ -680,7 +680,7 @@ pub const RawBson = union(enum) {
 
         const info = @typeInfo(dataType);
         owned.value = switch (info) {
-            .Struct => |v| blk: {
+            .@"struct" => |v| blk: {
                 var fields = try owned.arena.allocator().alloc(Document.ElementInit, v.fields.len);
                 inline for (v.fields, 0..) |field, i| {
                     // pass along this arena's allocator
@@ -691,17 +691,17 @@ pub const RawBson = union(enum) {
                 }
                 break :blk try RawBson.createDocument(fields, owned.arena.allocator());
             },
-            .Optional => blk: {
+            .optional => blk: {
                 if (data) |d| {
                     break :blk (try from(owned.arena.allocator(), d)).value;
                 } else {
                     break :blk RawBson.makeNull();
                 }
             },
-            .Bool => RawBson.makeBoolean(data),
-            .Enum => RawBson.makeString(@tagName(data)),
-            .ComptimeInt => RawBson.makeInt32(data),
-            .Int => |v| blk: {
+            .bool => RawBson.makeBoolean(data),
+            .@"enum" => RawBson.makeString(@tagName(data)),
+            .comptime_int => RawBson.makeInt32(data),
+            .int => |v| blk: {
                 if (v.signedness == .unsigned) {
                     std.debug.print("unsigned integers not yet supported\n", .{});
                     return error.UnsupportedType;
@@ -715,8 +715,8 @@ pub const RawBson = union(enum) {
                     },
                 }
             },
-            .ComptimeFloat => RawBson.makeDouble(data),
-            .Float => |v| blk: {
+            .comptime_float => RawBson.makeDouble(data),
+            .float => |v| blk: {
                 switch (v.bits) {
                     1...63 => break :blk RawBson.makeDouble(@floatCast(data)),
                     64 => break :blk RawBson.makeDouble(data),
@@ -726,7 +726,7 @@ pub const RawBson = union(enum) {
                     },
                 }
             },
-            .Array => |v| blk: {
+            .array => |v| blk: {
                 // if array of u8, assume a string
                 if (v.child == u8) {
                     break :blk RawBson.makeString(try owned.arena.allocator().dupe(u8, &data));
@@ -737,10 +737,10 @@ pub const RawBson = union(enum) {
                 }
                 break :blk RawBson.makeArray(elements);
             },
-            .Pointer => |v| blk: {
+            .pointer => |v| blk: {
                 switch (v.size) {
                     //*[]u8 { ... }
-                    .Slice => {
+                    .slice => {
                         if (v.child == u8) {
                             break :blk RawBson.makeString(try owned.arena.allocator().dupe(u8, data));
                         }
@@ -750,7 +750,7 @@ pub const RawBson = union(enum) {
                         }
                         break :blk RawBson.makeArray(try elements.toOwnedSlice());
                     },
-                    .One => break :blk (try from(owned.arena.allocator(), data.*)).value,
+                    .one => break :blk (try from(owned.arena.allocator(), data.*)).value,
                     else => |otherwise| {
                         std.debug.print("{any} pointer types not yet supported\n", .{otherwise});
                         return error.UnsupportedType;
@@ -845,21 +845,21 @@ pub const RawBson = union(enum) {
         }
 
         owned.value = switch (@typeInfo(T)) {
-            .Struct => |v| blk: {
+            .@"struct" => |v| blk: {
                 switch (self) {
                     .document => |doc| {
                         var parsed: T = undefined;
                         inline for (v.fields) |field| {
                             if (doc.get(field.name)) |value| {
                                 const ftype = switch (@typeInfo(field.type)) {
-                                    .Optional => |o| o.child,
+                                    .optional => |o| o.child,
                                     else => field.type,
                                 };
                                 @field(parsed, field.name) = (try value.into(owned.arena.allocator(), ftype)).value;
-                            } else if (field.default_value) |default| {
+                            } else if (field.default_value_ptr) |default| {
                                 const dvalue_aligned: *align(field.alignment) const anyopaque = @alignCast(default);
                                 @field(parsed, field.name) = @as(*const field.type, @ptrCast(dvalue_aligned)).*;
-                            } else if (@typeInfo(field.type) == .Optional) {
+                            } else if (@typeInfo(field.type) == .optional) {
                                 @field(parsed, field.name) = null;
                             } else {
                                 return error.UnresolvedValue;
@@ -870,13 +870,13 @@ pub const RawBson = union(enum) {
                     else => return error.IncompatibleBsonType,
                 }
             },
-            .Bool => blk: {
+            .bool => blk: {
                 switch (self) {
                     .boolean => |b| break :blk b,
                     else => return error.IncompatibleBsonType,
                 }
             },
-            .Enum => |v| blk: {
+            .@"enum" => |v| blk: {
                 switch (self) {
                     .string => |s| {
                         inline for (v.fields, 0..) |field, i| {
@@ -889,13 +889,13 @@ pub const RawBson = union(enum) {
                     else => return error.IncompatibleBsonType,
                 }
             },
-            .ComptimeInt => blk: {
+            .comptime_int => blk: {
                 switch (self) {
                     .int32 => |v| break :blk v.value,
                     else => return error.IncompatibleBsonType,
                 }
             },
-            .Int => |v| blk: {
+            .int => |v| blk: {
                 if (v.signedness == .unsigned) {
                     std.debug.print("unsigned integers not yet supported\n", .{});
                     break :blk error.UnsupportedType;
@@ -919,13 +919,13 @@ pub const RawBson = union(enum) {
                     },
                 }
             },
-            .ComptimeFloat => blk: {
+            .comptime_float => blk: {
                 switch (self) {
                     .double => |d| break :blk @floatCast(d.value),
                     else => return error.IncompatibleBsonType,
                 }
             },
-            .Float => |v| blk: {
+            .float => |v| blk: {
                 switch (v.bits) {
                     1...63 => {
                         switch (self) {
@@ -945,9 +945,9 @@ pub const RawBson = union(enum) {
                     },
                 }
             },
-            .Pointer => |v| blk: {
+            .pointer => |v| blk: {
                 switch (v.size) {
-                    .Slice => {
+                    .slice => {
                         if (v.child == u8) {
                             switch (self) {
                                 .string => |s| break :blk try owned.arena.allocator().dupe(u8, s),
@@ -958,11 +958,11 @@ pub const RawBson = union(enum) {
                             .array => |a| {
                                 // alloc an array to capture data
                                 var elements = try std.ArrayList(v.child).initCapacity(owned.arena.allocator(), a.len);
-                                elements.deinit();
+                                elements.deinit(owned.arena.allocator());
                                 for (a) |elem| {
                                     elements.appendAssumeCapacity((try elem.into(owned.arena.allocator(), v.child)).value);
                                 }
-                                break :blk try elements.toOwnedSlice();
+                                break :blk try elements.toOwnedSlice(owned.arena.allocator());
                             },
                             else => return error.IncompatibleBsonType,
                         }
@@ -1182,7 +1182,7 @@ test "RawBson.from" {
 
 test "RawBson.jsonStringify" {
     const allocator = std.testing.allocator;
-    const actual = try std.json.stringifyAlloc(allocator, RawBson{
+    const actual = try std.json.Stringify.valueAlloc(allocator, RawBson{
         .min_key = MinKey{},
     }, .{});
     defer allocator.free(actual);

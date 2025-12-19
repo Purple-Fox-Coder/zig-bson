@@ -140,9 +140,9 @@ test Writer {
     const reader = @import("reader.zig").reader;
 
     const allocator = std.testing.allocator;
-    var buf = std.ArrayList(u8).init(allocator);
-    defer buf.deinit();
-    var bsonWriter = writer(allocator, buf.writer());
+    var buf = std.ArrayList(u8).empty;
+    defer buf.deinit(allocator);
+    var bsonWriter = writer(allocator, buf.writer(allocator));
     defer bsonWriter.deinit();
 
     const doc = try RawBson.createDocument(
