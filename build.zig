@@ -11,20 +11,25 @@ pub fn build(b: *std.Build) !void {
 
     // used only for checking compilation
     // see https://kristoff.it/blog/improving-your-zls-experience/
-    // var compile = b.addStaticLibrary(.{
+    // var compile = b.addLibrary(.{
     //     .name = "bson",
-    //     .root_source_file = b.path("src/root.zig"),
-    //     .target = target,
-    //     .optimize = optimize,
+    //     .root_module = b.createModule(.{
+    //         .root_source_file = b.path("src/root.zig"),
+    //         .target = target,
+    //         .optimize = optimize,
+    //     }),
+    //     .linkage = .static
     // });
     // const check = b.step("check", "Check if foo compiles");
     // check.dependOn(&compile.step);
 
     // unit tests
     const unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/root.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/root.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
         // can this be parameterized?
         //.filters = &.{"from"},
     });
@@ -33,9 +38,11 @@ pub fn build(b: *std.Build) !void {
     test_step.dependOn(&run_unit_tests.step);
 
     const benchmark_tests = b.addTest(.{
-        .root_source_file = b.path("src/bench.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/bench.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
         .filters = &.{"bench"},
     });
     const benchmark = b.dependency("benchmark", .{
@@ -77,9 +84,11 @@ pub fn build(b: *std.Build) !void {
 
         var exe = b.addExecutable(.{
             .name = example.name,
-            .root_source_file = b.path(example.src),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(example.src),
+                .target = target,
+                .optimize = optimize,
+            })
         });
         exe.root_module.addImport("bson", bson);
 
