@@ -1,6 +1,7 @@
 .{
-    .name = "bson",
+    .name = .bson,
     .version = "0.1.4",
+    .fingerprint = 0xaeb30daad9efdc72,
     .dependencies = .{
         // todo: update this to a versioned tag when this package publishes one
         .benchmark = .{
