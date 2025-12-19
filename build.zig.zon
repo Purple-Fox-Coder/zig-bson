@@ -9,7 +9,7 @@
             .hash = "benchmark-0.1.0-5BzpxEY7AACOBFOmmxBpgQ1pPDnb7wka-OF2BVRKeshT",
         },
     },
-    .minimum_zig_version = "0.13.0",
+    .minimum_zig_version = "0.15.0",
     .paths = .{
         "build.zig",
         "build.zig.zon",
